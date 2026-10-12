@@ -54,8 +54,10 @@ let animationFrame: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let previousFrameTime = 0;
 let generation = 0;
-let loadedFingerprint = '';
+let currentFingerprint = '';
 let activeController: AbortController | null = null;
+let refreshCheckRunning = false;
+let refreshInterval: number | null = null;
 
 function setStatus(message: string): void {
   status.textContent = message;
@@ -254,20 +256,22 @@ function startRenderLoop(): void {
 }
 
 async function loadFederation(sources: SourceModel[], requestGeneration: number, signal: AbortSignal): Promise<void> {
-  if (sources.length === 0) {
-    await renderer.init();
-    if (generation !== requestGeneration || signal.aborted) return;
+  clearError();
+  setStatus(sources.length === 0
+    ? 'Unloading disabled models…'
+    : `Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
+  selectionPanel.hidden = true;
+  await renderer.init();
+  if (generation !== requestGeneration || signal.aborted) return;
 
-    loadedModels.clear();
-    federationRegistry.clear();
-    selectionPanel.hidden = true;
+  loadedModels.clear();
+  federationRegistry.clear();
+
+  if (sources.length === 0) {
     setStatus('No models are marked Show.');
     return;
   }
 
-  clearError();
-  selectionPanel.hidden = true;
-  setStatus(`Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
   const stagedModels: LoadedModel[] = [];
 
   for (let index = 0; index < sources.length; index += 1) {
@@ -315,10 +319,6 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
     }
   }
 
-  await renderer.init();
-  if (generation !== requestGeneration || signal.aborted) return;
-
-  federationRegistry.clear();
   for (const model of stagedModels) {
     model.offset = federationRegistry.registerModel(model.id, maximumExpressId(model.store, model.geometry.meshes));
     applyIdOffset(model.geometry.meshes, model.offset);
@@ -332,32 +332,37 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
 }
 
 function refreshModels(): void {
-  if (!gristApi) return;
-
-  generation += 1;
-  activeController?.abort();
-  const requestGeneration = generation;
-  const controller = new AbortController();
-  activeController = controller;
+  if (!gristApi || refreshCheckRunning) return;
+  refreshCheckRunning = true;
 
   void (async () => {
     const table = await gristApi.docApi.fetchTable('Models');
-    if (generation !== requestGeneration) return;
-
     const sources = buildSourceModels(table);
     const fingerprint = JSON.stringify(sources);
-    if (fingerprint === loadedFingerprint) return;
+    if (fingerprint === currentFingerprint) return;
 
-    await loadFederation(sources, requestGeneration, controller.signal);
-    if (generation === requestGeneration) loadedFingerprint = fingerprint;
+    currentFingerprint = fingerprint;
+    generation += 1;
+    activeController?.abort();
+    const requestGeneration = generation;
+    const controller = new AbortController();
+    activeController = controller;
+
+    void loadFederation(sources, requestGeneration, controller.signal)
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError') && generation === requestGeneration) {
+          showError(error);
+        }
+      })
+      .finally(() => {
+        if (generation === requestGeneration) activeController = null;
+      });
   })()
     .catch((error: unknown) => {
-      if (!(error instanceof DOMException && error.name === 'AbortError') && generation === requestGeneration) {
-        showError(error);
-      }
+      showError(error);
     })
     .finally(() => {
-      if (generation === requestGeneration) activeController = null;
+      refreshCheckRunning = false;
     });
 }
 
@@ -392,6 +397,7 @@ function start(): void {
       });
       gristApi.onRecords(refreshModels);
       refreshModels();
+      refreshInterval = window.setInterval(refreshModels, 1000);
     } catch (error) {
       showError(error);
     }
@@ -404,6 +410,7 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('beforeunload', () => {
   if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+  if (refreshInterval !== null) window.clearInterval(refreshInterval);
   resizeObserver?.disconnect();
   activeController?.abort();
 });

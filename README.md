@@ -21,7 +21,8 @@ in one federated IFClite scene.
    column ID as `Link`. Only rows where `Show` is enabled are loaded. The
    model host must allow browser cross-origin requests from the widget. When
    the `Models` table changes, the widget refreshes the federation and clears
-   the previous scene so disabled models are unloaded.
+   the previous scene so disabled models are unloaded. It also checks the table
+   once per second in case a table change notification is missed.
 
 The widget downloads models from the URLs in the Link column. It does not send
 Grist access tokens to model hosts.
