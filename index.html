@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IFClite Federation</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <strong>IFC Federation</strong>
+        <span id="status" role="status">Waiting for Grist data…</span>
+      </header>
+      <main>
+        <canvas id="viewer" aria-label="Federated IFC models"></canvas>
+        <aside>
+          <section id="models" aria-label="Loaded models"></section>
+          <section id="selection" aria-label="Selected element">Click an element to inspect it.</section>
+        </aside>
+      </main>
+      <div id="error" role="alert" hidden></div>
+    </div>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
