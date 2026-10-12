@@ -12,15 +12,13 @@ in one federated IFClite scene.
    <https://aurizasalim.github.io/grist-ifc-widget4/>.
 3. Add a **Custom** widget to a Grist page, select the table containing the
    models, and set the widget URL to the hosted `index.html`.
-4. Grant **Read selected table** access and map the required **IFC model**
-   field to an Attachments column. Optionally map **Model name** to a Text
-   column.
-5. Put one IFC file in each row's attachment cell. Rows with multiple attached
-   IFCs are supported; every file is loaded as an individual model.
+4. Grant **Read selected table** access and map the **Link** field to the
+   **Link** Text column and the **Name** field to the **Name** Text column.
+5. Put one direct HTTP(S) IFC file URL in each row's Link cell. The target
+   server must allow browser cross-origin requests from the widget.
 
-The widget fetches attachment data directly from the current Grist document's
-attachment download endpoint using a read-only token. The token and file
-contents are not sent to another service.
+The widget downloads models from the URLs in the Link column. It does not send
+Grist access tokens to model hosts.
 
 ## Development
 

@@ -22,12 +22,6 @@ interface GristApi {
   }): void;
   onRecords(callback: (records: GristRecord[]) => void): void;
   mapColumnNames(record: GristRecord): Record<string, unknown> | null;
-  docApi: {
-    getAccessToken(options?: { readOnly?: boolean }): Promise<{
-      baseUrl: string;
-      token: string;
-    }>;
-  };
 }
 
 declare const grist: GristApi | undefined;
@@ -35,7 +29,7 @@ declare const grist: GristApi | undefined;
 interface SourceModel {
   id: string;
   name: string;
-  attachmentId: number;
+  url: string;
 }
 
 interface LoadedModel {
@@ -88,29 +82,34 @@ function clearError(): void {
   errorPanel.hidden = true;
 }
 
-function extractAttachmentIds(value: unknown): number[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((id): id is number => Number.isSafeInteger(id) && Number(id) > 0);
-}
-
 function buildSourceModels(records: GristRecord[]): SourceModel[] {
-  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load IFC attachments.');
+  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load model URLs.');
   const models: SourceModel[] = [];
   records.forEach((record, rowIndex) => {
     const mapped = gristApi.mapColumnNames(record);
     if (!mapped) {
-      throw new Error('Map the required IFC model field to an Attachments column in Grist.');
+      throw new Error('Map the required Link field to a Text column in Grist.');
     }
 
-    const attachmentIds = extractAttachmentIds(mapped.ifcModel);
-    const mappedName = typeof mapped.modelName === 'string' ? mapped.modelName.trim() : '';
-    attachmentIds.forEach((attachmentId, attachmentIndex) => {
-      const rowId = record.id ?? rowIndex;
-      models.push({
-        id: `${rowId}:${attachmentId}:${attachmentIndex}`,
-        name: mappedName,
-        attachmentId,
-      });
+    const link = typeof mapped.modelLink === 'string' ? mapped.modelLink.trim() : '';
+    if (!link) return;
+
+    let url: URL;
+    try {
+      url = new URL(link);
+    } catch {
+      throw new Error(`The Link value in row ${record.id ?? rowIndex} is not a valid URL.`);
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error(`The Link in row ${record.id ?? rowIndex} must use HTTP or HTTPS.`);
+    }
+
+    const name = typeof mapped.modelName === 'string' ? mapped.modelName.trim() : '';
+    const rowId = record.id ?? rowIndex;
+    models.push({
+      id: `${rowId}:${url.href}`,
+      name,
+      url: url.href,
     });
   });
   return models;
@@ -129,20 +128,27 @@ function parseFilename(contentDisposition: string | null): string | null {
   return contentDisposition.match(/filename="?([^";]+)"?/i)?.[1] ?? null;
 }
 
-async function fetchAttachment(
-  attachmentId: number,
-  access: { baseUrl: string; token: string },
+async function fetchModelUrl(
+  url: string,
   signal: AbortSignal,
 ): Promise<{ buffer: ArrayBuffer; filename: string | null }> {
-  const baseUrl = access.baseUrl.replace(/\/$/, '');
-  const url = `${baseUrl}/attachments/${attachmentId}/download?auth=${encodeURIComponent(access.token)}`;
   const response = await fetch(url, { signal });
   if (!response.ok) {
-    throw new Error(`Grist attachment ${attachmentId} could not be downloaded (${response.status} ${response.statusText}).`);
+    throw new Error(`The IFC model at ${url} could not be downloaded (${response.status} ${response.statusText}).`);
+  }
+  const pathFilename = new URL(response.url || url).pathname.split('/').pop();
+  let filename = parseFilename(response.headers.get('Content-Disposition'));
+  if (!filename && pathFilename) {
+    try {
+      filename = decodeURIComponent(pathFilename);
+    } catch (error) {
+      console.warn('Could not decode the IFC filename from its URL.', error);
+      filename = pathFilename;
+    }
   }
   return {
     buffer: await response.arrayBuffer(),
-    filename: parseFilename(response.headers.get('Content-Disposition')),
+    filename,
   };
 }
 
@@ -283,7 +289,7 @@ function startRenderLoop(): void {
 }
 
 async function loadFederation(records: GristRecord[], requestGeneration: number, signal: AbortSignal): Promise<void> {
-  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load IFC attachments.');
+  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load model URLs.');
   const sources = buildSourceModels(records);
   if (sources.length === 0) {
     loadedModels.clear();
@@ -296,8 +302,7 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
   }
 
   clearError();
-  setStatus(`Getting access to ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
-  const access = await gristApi.docApi.getAccessToken({ readOnly: true });
+  setStatus(`Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
   const stagedModels: LoadedModel[] = [];
 
   for (let index = 0; index < sources.length; index += 1) {
@@ -305,10 +310,10 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
     const source = sources[index];
     setStatus(`Loading ${source.name || `model ${index + 1}`} (${index + 1}/${sources.length})…`);
 
-    const attachment = await fetchAttachment(source.attachmentId, access, signal);
-    const filename = source.name || attachment.filename || `IFC model ${index + 1}.ifc`;
-    const geometryBytes = new Uint8Array(attachment.buffer.slice(0));
-    const store = await parser.parseColumnar(attachment.buffer, {
+    const modelFile = await fetchModelUrl(source.url, signal);
+    const filename = source.name || modelFile.filename || `IFC model ${index + 1}.ifc`;
+    const geometryBytes = new Uint8Array(modelFile.buffer.slice(0));
+    const store = await parser.parseColumnar(modelFile.buffer, {
       onProgress: ({ phase, percent }) => {
         if (generation === requestGeneration) setStatus(`${filename}: ${phase} ${percent}%`);
       },
@@ -390,8 +395,8 @@ function start(): void {
       });
       gristApi.ready({
         columns: [
-          { name: 'ifcModel', title: 'IFC model', type: 'Attachments', optional: false },
-          { name: 'modelName', title: 'Model name', type: 'Text', optional: true },
+          { name: 'modelLink', title: 'Link', type: 'Text', optional: false },
+          { name: 'modelName', title: 'Name', type: 'Text', optional: true },
         ],
         requiredAccess: 'read table',
       });
