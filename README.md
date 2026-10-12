@@ -5,8 +5,9 @@ in one federated IFClite scene.
 
 ## Configure in Grist
 
-1. Host the built `dist/` directory on a public HTTPS host (for example,
-   GitHub Pages).
+1. The widget is published at
+   <https://aurizasalim.github.io/grist-ifc-widget4/> by the GitHub Pages
+   workflow.
 2. Add a **Custom** widget to a Grist page, select the table containing the
    models, and set the widget URL to the hosted `index.html`.
 3. Grant **Read selected table** access and map the required **IFC model**
@@ -30,3 +31,5 @@ npm run build
 The viewer requires a browser with WebGPU. Geometry is processed in the
 browser's main thread so the Grist widget API can load without cross-origin
 isolation headers.
+
+Pushing to `main` automatically builds and publishes `dist/` to GitHub Pages.
