@@ -21,12 +21,12 @@ body,
   display: flex;
   flex-direction: column;
   min-height: 260px;
+  position: relative;
 }
 
 header {
   display: flex;
   align-items: center;
-  gap: 1rem;
   min-height: 44px;
   padding: 0.55rem 0.8rem;
   border-bottom: 1px solid #374151;
@@ -37,18 +37,11 @@ header strong {
   white-space: nowrap;
 }
 
-#status {
-  overflow: hidden;
-  color: #9ca3af;
-  font-size: 0.82rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 main {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
 #viewer {
@@ -58,52 +51,39 @@ main {
   min-height: 0;
 }
 
-aside {
-  display: flex;
-  flex: 0 0 min(280px, 35%);
-  flex-direction: column;
-  overflow-y: auto;
-  border-left: 1px solid #374151;
-  background: #1f2937;
-}
-
-#models {
-  padding: 0.6rem;
-}
-
-.model-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.35rem 0.55rem;
-  align-items: center;
-  padding: 0.55rem 0.25rem;
-  border-bottom: 1px solid #374151;
-  cursor: pointer;
-}
-
-.model-row input {
-  grid-row: span 2;
-  accent-color: #38bdf8;
-}
-
-.model-name {
+#status {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
   overflow: hidden;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgb(55 65 81 / 80%);
+  border-radius: 0.35rem;
+  background: rgb(31 41 55 / 92%);
+  color: #d1d5db;
   font-size: 0.85rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.model-row small {
-  color: #9ca3af;
-  font-size: 0.72rem;
-}
-
 #selection {
-  margin-top: auto;
+  position: absolute;
+  right: 0.75rem;
+  bottom: 3.65rem;
+  z-index: 1;
+  max-width: min(280px, calc(100% - 1.5rem));
   padding: 0.75rem;
-  border-top: 1px solid #374151;
+  border: 1px solid rgb(55 65 81 / 80%);
+  border-radius: 0.35rem;
+  background: rgb(31 41 55 / 92%);
   overflow-wrap: anywhere;
   font-size: 0.82rem;
+}
+
+#selection[hidden] {
+  display: none;
 }
 
 #selection p {
@@ -121,10 +101,4 @@ aside {
 
 #error[hidden] {
   display: none;
-}
-
-@media (max-width: 580px) {
-  aside {
-    flex-basis: 190px;
-  }
 }

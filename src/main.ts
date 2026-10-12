@@ -32,7 +32,6 @@ interface LoadedModel {
   name: string;
   store: IfcDataStore;
   geometry: GeometryResult;
-  visible: boolean;
   offset: number;
 }
 
@@ -44,7 +43,6 @@ function requireElement<T extends HTMLElement>(selector: string): T {
 
 const canvas = requireElement<HTMLCanvasElement>('#viewer');
 const status = requireElement<HTMLElement>('#status');
-const modelList = requireElement<HTMLElement>('#models');
 const selectionPanel = requireElement<HTMLElement>('#selection');
 const errorPanel = requireElement<HTMLElement>('#error');
 const gristApi = typeof grist === 'undefined' ? null : grist;
@@ -215,9 +213,7 @@ function applyIdOffset(meshes: MeshData[], offset: number): void {
 }
 
 function setVisibleGeometry(fitView: boolean): void {
-  const meshes = Array.from(loadedModels.values())
-    .filter((model) => model.visible)
-    .flatMap((model) => model.geometry.meshes);
+  const meshes = Array.from(loadedModels.values()).flatMap((model) => model.geometry.meshes);
   const outcome = renderer.loadGeometry(meshes);
   if (!outcome.ok) {
     throw outcome.reason === 'error' ? outcome.error : new Error('The WebGPU device was lost while loading model geometry.');
@@ -225,40 +221,10 @@ function setVisibleGeometry(fitView: boolean): void {
   if (fitView && meshes.length > 0) renderer.fitToView();
 }
 
-function renderModelList(): void {
-  modelList.replaceChildren();
-  for (const model of loadedModels.values()) {
-    const label = document.createElement('label');
-    label.className = 'model-row';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = model.visible;
-    checkbox.setAttribute('aria-label', `Show ${model.name}`);
-    checkbox.addEventListener('change', () => {
-      model.visible = checkbox.checked;
-      try {
-        setVisibleGeometry(false);
-      } catch (error) {
-        showError(error);
-      }
-    });
-
-    const name = document.createElement('span');
-    name.className = 'model-name';
-    name.textContent = model.name;
-
-    const count = document.createElement('small');
-    count.textContent = `${model.store.entityCount.toLocaleString()} entities`;
-
-    label.append(checkbox, name, count);
-    modelList.append(label);
-  }
-}
-
 function displaySelection(globalId: number): void {
   const lookup = federationRegistry.fromGlobalId(globalId);
   const model = lookup ? loadedModels.get(lookup.modelId) : undefined;
+  selectionPanel.hidden = false;
   if (!lookup || !model) {
     selectionPanel.textContent = `Selected global entity #${globalId}`;
     return;
@@ -294,13 +260,13 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
 
     loadedModels.clear();
     federationRegistry.clear();
-    renderModelList();
-    selectionPanel.textContent = 'No models with Show enabled were found in the Models table.';
+    selectionPanel.hidden = true;
     setStatus('No models are marked Show.');
     return;
   }
 
   clearError();
+  selectionPanel.hidden = true;
   setStatus(`Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
   const stagedModels: LoadedModel[] = [];
 
@@ -329,7 +295,6 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
       name: filename,
       store,
       geometry,
-      visible: true,
       offset: 0,
     });
   }
@@ -357,14 +322,11 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
   for (const model of stagedModels) {
     model.offset = federationRegistry.registerModel(model.id, maximumExpressId(model.store, model.geometry.meshes));
     applyIdOffset(model.geometry.meshes, model.offset);
-    model.visible = true;
   }
 
   loadedModels.clear();
   for (const model of stagedModels) loadedModels.set(model.id, model);
   setVisibleGeometry(true);
-  renderModelList();
-  selectionPanel.textContent = 'Click an element to inspect it.';
   const entityCount = stagedModels.reduce((sum, model) => sum + model.store.entityCount, 0);
   setStatus(`Federated ${stagedModels.length} model${stagedModels.length === 1 ? '' : 's'} · ${entityCount.toLocaleString()} entities`);
 }

@@ -9,14 +9,11 @@
     <div id="app">
       <header>
         <strong>IFC Federation</strong>
-        <span id="status" role="status">Waiting for Grist data…</span>
       </header>
       <main>
         <canvas id="viewer" aria-label="Federated IFC models"></canvas>
-        <aside>
-          <section id="models" aria-label="Loaded models"></section>
-          <section id="selection" aria-label="Selected element">Click an element to inspect it.</section>
-        </aside>
+        <section id="selection" aria-label="Selected element" hidden></section>
+        <div id="status" role="status" aria-live="polite">Waiting for Grist data…</div>
       </main>
       <div id="error" role="alert" hidden></div>
     </div>

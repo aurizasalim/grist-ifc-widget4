@@ -25,6 +25,9 @@ in one federated IFClite scene.
 
 The widget downloads models from the URLs in the Link column. It does not send
 Grist access tokens to model hosts.
+The viewer uses the full widget width; federation status floats along the
+bottom of the viewer, and model visibility is controlled from the `Models`
+table rather than a widget sidebar.
 
 ## Development
 
