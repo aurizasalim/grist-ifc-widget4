@@ -88,7 +88,7 @@ function buildSourceModels(records: GristRecord[]): SourceModel[] {
   records.forEach((record, rowIndex) => {
     const mapped = gristApi.mapColumnNames(record);
     if (!mapped) {
-      throw new Error('Map the Link, Name, and Show fields to their MODELS table columns in Grist.');
+      throw new Error('Select the Models table and map Link, Name, and Show to their matching columns in Grist.');
     }
 
     if (mapped.showModel !== true) return;
@@ -298,7 +298,7 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
     federationRegistry.clear();
     setVisibleGeometry(false);
     renderModelList();
-    selectionPanel.textContent = 'No models with Show enabled were found in the MODELS table.';
+    selectionPanel.textContent = 'No models with Show enabled were found in the Models table.';
     setStatus('No models are marked Show.');
     return;
   }
@@ -371,7 +371,7 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
 
 function start(): void {
   if (!gristApi) {
-    setStatus('Open this page as a Grist custom widget to load IFC attachments.');
+    setStatus('Open this page as a Grist custom widget to load IFC model URLs.');
     return;
   }
 
