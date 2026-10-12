@@ -1,4 +1,44 @@
-import type { Renderer } from '@ifc-lite/renderer';
+import type { ProjectionMode, Renderer } from '@ifc-lite/renderer';
+
+interface CameraView {
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  up: { x: number; y: number; z: number };
+  fov: number;
+  projectionMode: ProjectionMode;
+  orthoSize: number;
+}
+
+export class CameraViewState {
+  private hasEstablishedView = false;
+
+  capture(renderer: Renderer): CameraView | null {
+    if (!this.hasEstablishedView) return null;
+
+    const camera = renderer.getCamera();
+    return {
+      position: camera.getPosition(),
+      target: camera.getTarget(),
+      up: camera.getUp(),
+      fov: camera.getFOV(),
+      projectionMode: camera.getProjectionMode(),
+      orthoSize: camera.getOrthoSize(),
+    };
+  }
+
+  restore(renderer: Renderer, view: CameraView | null): void {
+    if (!view) return;
+
+    const camera = renderer.getCamera();
+    camera.setProjectionMode(view.projectionMode);
+    camera.setOrthoSize(view.orthoSize);
+    camera.setPosition(view.position.x, view.position.y, view.position.z);
+    camera.setTarget(view.target.x, view.target.y, view.target.z);
+    camera.setUp(view.up.x, view.up.y, view.up.z);
+    camera.setFOV(view.fov);
+    this.hasEstablishedView = true;
+  }
+}
 
 export function setupCameraControls(canvas: HTMLCanvasElement, renderer: Renderer): void {
   const camera = renderer.getCamera();

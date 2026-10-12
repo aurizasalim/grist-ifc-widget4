@@ -2,8 +2,8 @@ import { GeometryProcessor, type GeometryResult, type MeshData } from '@ifc-lite
 import { chooseSharedRtcOffset } from '@ifc-lite/geometry/world-frame';
 import { convergeGeometryOntoRtcAnchor } from '@ifc-lite/geometry/rtc-rebase';
 import { IfcParser, type IfcDataStore } from '@ifc-lite/parser';
-import { federationRegistry, Renderer, type ProjectionMode } from '@ifc-lite/renderer';
-import { setupCameraControls } from './camera';
+import { federationRegistry, Renderer } from '@ifc-lite/renderer';
+import { CameraViewState, setupCameraControls } from './camera';
 import './style.css';
 
 interface GristTableData {
@@ -36,15 +36,6 @@ interface LoadedModel {
   offset: number;
 }
 
-interface CameraView {
-  position: { x: number; y: number; z: number };
-  target: { x: number; y: number; z: number };
-  up: { x: number; y: number; z: number };
-  fov: number;
-  projectionMode: ProjectionMode;
-  orthoSize: number;
-}
-
 function requireElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`The widget page is missing ${selector}.`);
@@ -59,6 +50,7 @@ const gristApi = typeof grist === 'undefined' ? null : grist;
 const renderer = new Renderer(canvas);
 const geometryProcessor = new GeometryProcessor({ enableInstancing: false });
 const parser = new IfcParser();
+const cameraViewState = new CameraViewState();
 const loadedModels = new Map<string, LoadedModel>();
 let animationFrame: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -68,7 +60,6 @@ let currentFingerprint = '';
 let activeController: AbortController | null = null;
 let refreshCheckRunning = false;
 let refreshInterval: number | null = null;
-let cameraHasBeenEstablished = false;
 
 function setStatus(message: string): void {
   status.textContent = message;
@@ -266,35 +257,13 @@ function startRenderLoop(): void {
   animationFrame = requestAnimationFrame(render);
 }
 
-function captureCameraView(): CameraView {
-  const camera = renderer.getCamera();
-  return {
-    position: camera.getPosition(),
-    target: camera.getTarget(),
-    up: camera.getUp(),
-    fov: camera.getFOV(),
-    projectionMode: camera.getProjectionMode(),
-    orthoSize: camera.getOrthoSize(),
-  };
-}
-
-function restoreCameraView(view: CameraView): void {
-  const camera = renderer.getCamera();
-  camera.setProjectionMode(view.projectionMode);
-  camera.setOrthoSize(view.orthoSize);
-  camera.setPosition(view.position.x, view.position.y, view.position.z);
-  camera.setTarget(view.target.x, view.target.y, view.target.z);
-  camera.setUp(view.up.x, view.up.y, view.up.z);
-  camera.setFOV(view.fov);
-}
-
 async function loadFederation(sources: SourceModel[], requestGeneration: number, signal: AbortSignal): Promise<void> {
   clearError();
   setStatus(sources.length === 0
     ? 'Unloading disabled models…'
     : `Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
   selectionPanel.hidden = true;
-  const cameraView = cameraHasBeenEstablished ? captureCameraView() : null;
+  const cameraView = cameraViewState.capture(renderer);
   await renderer.init();
   if (generation !== requestGeneration || signal.aborted) return;
 
@@ -302,6 +271,7 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
   federationRegistry.clear();
 
   if (sources.length === 0) {
+    cameraViewState.restore(renderer, cameraView);
     setStatus('No models are marked Show.');
     return;
   }
@@ -361,8 +331,7 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
   loadedModels.clear();
   for (const model of stagedModels) loadedModels.set(model.id, model);
   setVisibleGeometry(cameraView === null);
-  if (cameraView) restoreCameraView(cameraView);
-  cameraHasBeenEstablished = true;
+  cameraViewState.restore(renderer, cameraView);
   const entityCount = stagedModels.reduce((sum, model) => sum + model.store.entityCount, 0);
   setStatus(`Federated ${stagedModels.length} model${stagedModels.length === 1 ? '' : 's'} · ${entityCount.toLocaleString()} entities`);
 }
