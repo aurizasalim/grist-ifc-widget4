@@ -5,23 +5,18 @@ import { IfcParser, type IfcDataStore } from '@ifc-lite/parser';
 import { federationRegistry, Renderer } from '@ifc-lite/renderer';
 import './style.css';
 
-interface GristRecord {
-  id?: number;
-  [columnId: string]: unknown;
+interface GristTableData {
+  [columnId: string]: unknown[];
 }
 
 interface GristApi {
   ready(settings: {
-    columns: Array<{
-      name: string;
-      title: string;
-      type: string;
-      optional: boolean;
-    }>;
-    requiredAccess: 'read table';
+    requiredAccess: 'full';
   }): void;
-  onRecords(callback: (records: GristRecord[]) => void): void;
-  mapColumnNames(record: GristRecord): Record<string, unknown> | null;
+  onRecords(callback: () => void): void;
+  docApi: {
+    fetchTable(tableId: string): Promise<GristTableData>;
+  };
 }
 
 declare const grist: GristApi | undefined;
@@ -61,7 +56,6 @@ let animationFrame: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let previousFrameTime = 0;
 let generation = 0;
-let activeFingerprint = '';
 let loadedFingerprint = '';
 let activeController: AbortController | null = null;
 
@@ -82,34 +76,37 @@ function clearError(): void {
   errorPanel.hidden = true;
 }
 
-function buildSourceModels(records: GristRecord[]): SourceModel[] {
-  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load model URLs.');
+function buildSourceModels(table: GristTableData): SourceModel[] {
+  const links = table.Link;
+  const names = table.Name;
+  const shows = table.Show;
+  const rowIds = table.id;
+  if (!Array.isArray(links) || !Array.isArray(shows) || !Array.isArray(rowIds)) {
+    throw new Error('The Models table must have Link and Show columns, and Grist row IDs.');
+  }
+
   const models: SourceModel[] = [];
-  records.forEach((record, rowIndex) => {
-    const mapped = gristApi.mapColumnNames(record);
-    if (!mapped) {
-      throw new Error('Select the Models table and map Link, Name, and Show to their matching columns in Grist.');
-    }
+  links.forEach((value, rowIndex) => {
+    if (shows[rowIndex] !== true) return;
 
-    if (mapped.showModel !== true) return;
-
-    const link = typeof mapped.modelLink === 'string' ? mapped.modelLink.trim() : '';
+    const link = typeof value === 'string' ? value.trim() : '';
     if (!link) return;
 
     let url: URL;
     try {
       url = new URL(link);
     } catch {
-      throw new Error(`The Link value in row ${record.id ?? rowIndex} is not a valid URL.`);
+      throw new Error(`The Link value in row ${rowIds[rowIndex]} is not a valid URL.`);
     }
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      throw new Error(`The Link in row ${record.id ?? rowIndex} must use HTTP or HTTPS.`);
+      throw new Error(`The Link in row ${rowIds[rowIndex]} must use HTTP or HTTPS.`);
     }
 
-    const name = typeof mapped.modelName === 'string' ? mapped.modelName.trim() : '';
-    const rowId = record.id ?? rowIndex;
+    const name = Array.isArray(names) && typeof names[rowIndex] === 'string'
+      ? names[rowIndex].trim()
+      : '';
     models.push({
-      id: `${rowId}:${url.href}`,
+      id: `${rowIds[rowIndex]}:${url.href}`,
       name,
       url: url.href,
     });
@@ -290,9 +287,7 @@ function startRenderLoop(): void {
   animationFrame = requestAnimationFrame(render);
 }
 
-async function loadFederation(records: GristRecord[], requestGeneration: number, signal: AbortSignal): Promise<void> {
-  if (!gristApi) throw new Error('Open this page as a Grist custom widget to load model URLs.');
-  const sources = buildSourceModels(records);
+async function loadFederation(sources: SourceModel[], requestGeneration: number, signal: AbortSignal): Promise<void> {
   if (sources.length === 0) {
     loadedModels.clear();
     federationRegistry.clear();
@@ -369,6 +364,36 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
   setStatus(`Federated ${stagedModels.length} model${stagedModels.length === 1 ? '' : 's'} · ${entityCount.toLocaleString()} entities`);
 }
 
+function refreshModels(): void {
+  if (!gristApi) return;
+
+  generation += 1;
+  activeController?.abort();
+  const requestGeneration = generation;
+  const controller = new AbortController();
+  activeController = controller;
+
+  void (async () => {
+    const table = await gristApi.docApi.fetchTable('Models');
+    if (generation !== requestGeneration) return;
+
+    const sources = buildSourceModels(table);
+    const fingerprint = JSON.stringify(sources);
+    if (fingerprint === loadedFingerprint) return;
+
+    await loadFederation(sources, requestGeneration, controller.signal);
+    if (generation === requestGeneration) loadedFingerprint = fingerprint;
+  })()
+    .catch((error: unknown) => {
+      if (!(error instanceof DOMException && error.name === 'AbortError') && generation === requestGeneration) {
+        showError(error);
+      }
+    })
+    .finally(() => {
+      if (generation === requestGeneration) activeController = null;
+    });
+}
+
 function start(): void {
   if (!gristApi) {
     setStatus('Open this page as a Grist custom widget to load IFC model URLs.');
@@ -396,39 +421,10 @@ function start(): void {
         }
       });
       gristApi.ready({
-        columns: [
-          { name: 'modelLink', title: 'Link', type: 'Text', optional: false },
-          { name: 'modelName', title: 'Name', type: 'Text', optional: true },
-          { name: 'showModel', title: 'Show', type: 'Bool', optional: false },
-        ],
-        requiredAccess: 'read table',
+        requiredAccess: 'full',
       });
-      gristApi.onRecords((records) => {
-        const fingerprint = JSON.stringify(records.map((record) => [record.id, gristApi.mapColumnNames(record)]));
-        if (fingerprint === activeFingerprint || fingerprint === loadedFingerprint) return;
-
-        generation += 1;
-        activeController?.abort();
-        const requestGeneration = generation;
-        const controller = new AbortController();
-        activeController = controller;
-        activeFingerprint = fingerprint;
-        void loadFederation(records, requestGeneration, controller.signal)
-          .then(() => {
-            if (generation === requestGeneration) loadedFingerprint = fingerprint;
-          })
-          .catch((error: unknown) => {
-            if (!(error instanceof DOMException && error.name === 'AbortError') && generation === requestGeneration) {
-              showError(error);
-            }
-          })
-          .finally(() => {
-            if (generation === requestGeneration) {
-              activeFingerprint = '';
-              activeController = null;
-            }
-          });
-      });
+      gristApi.onRecords(refreshModels);
+      refreshModels();
     } catch (error) {
       showError(error);
     }
