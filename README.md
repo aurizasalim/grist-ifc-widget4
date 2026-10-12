@@ -19,7 +19,9 @@ in one federated IFClite scene.
 5. Put one direct HTTP(S) IFC file URL in each row's `Link` cell. In Grist
    formulas, the Link column is referenced as `$Link`; the widget reads its
    column ID as `Link`. Only rows where `Show` is enabled are loaded. The
-   model host must allow browser cross-origin requests from the widget.
+   model host must allow browser cross-origin requests from the widget. When
+   the `Models` table changes, the widget refreshes the federation and clears
+   the previous scene so disabled models are unloaded.
 
 The widget downloads models from the URLs in the Link column. It does not send
 Grist access tokens to model hosts.
