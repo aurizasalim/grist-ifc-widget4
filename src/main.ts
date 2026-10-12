@@ -289,9 +289,11 @@ function startRenderLoop(): void {
 
 async function loadFederation(sources: SourceModel[], requestGeneration: number, signal: AbortSignal): Promise<void> {
   if (sources.length === 0) {
+    await renderer.init();
+    if (generation !== requestGeneration || signal.aborted) return;
+
     loadedModels.clear();
     federationRegistry.clear();
-    setVisibleGeometry(false);
     renderModelList();
     selectionPanel.textContent = 'No models with Show enabled were found in the Models table.';
     setStatus('No models are marked Show.');
@@ -347,6 +349,9 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
       throw new Error(`Could not align GPU-instanced model geometry to the federation frame: ${refusedNames.join(', ')}.`);
     }
   }
+
+  await renderer.init();
+  if (generation !== requestGeneration || signal.aborted) return;
 
   federationRegistry.clear();
   for (const model of stagedModels) {
