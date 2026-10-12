@@ -88,8 +88,10 @@ function buildSourceModels(records: GristRecord[]): SourceModel[] {
   records.forEach((record, rowIndex) => {
     const mapped = gristApi.mapColumnNames(record);
     if (!mapped) {
-      throw new Error('Map the required Link field to a Text column in Grist.');
+      throw new Error('Map the Link, Name, and Show fields to their MODELS table columns in Grist.');
     }
+
+    if (mapped.showModel !== true) return;
 
     const link = typeof mapped.modelLink === 'string' ? mapped.modelLink.trim() : '';
     if (!link) return;
@@ -296,8 +298,8 @@ async function loadFederation(records: GristRecord[], requestGeneration: number,
     federationRegistry.clear();
     setVisibleGeometry(false);
     renderModelList();
-    selectionPanel.textContent = 'No IFC attachments found in the selected table.';
-    setStatus('No IFC models to display.');
+    selectionPanel.textContent = 'No models with Show enabled were found in the MODELS table.';
+    setStatus('No models are marked Show.');
     return;
   }
 
@@ -397,6 +399,7 @@ function start(): void {
         columns: [
           { name: 'modelLink', title: 'Link', type: 'Text', optional: false },
           { name: 'modelName', title: 'Name', type: 'Text', optional: true },
+          { name: 'showModel', title: 'Show', type: 'Bool', optional: false },
         ],
         requiredAccess: 'read table',
       });

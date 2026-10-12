@@ -10,12 +10,15 @@ in one federated IFClite scene.
    the first deployment.
 2. After the Pages workflow succeeds, the widget will be available at
    <https://aurizasalim.github.io/grist-ifc-widget4/>.
-3. Add a **Custom** widget to a Grist page, select the table containing the
-   models, and set the widget URL to the hosted `index.html`.
-4. Grant **Read selected table** access and map the **Link** field to the
-   **Link** Text column and the **Name** field to the **Name** Text column.
-5. Put one direct HTTP(S) IFC file URL in each row's Link cell. The target
-   server must allow browser cross-origin requests from the widget.
+3. Add a **Custom** widget to the page and set its URL to the hosted
+   `index.html`. In the widget's **Data** settings, select the `MODELS` table
+   and include all its rows.
+4. Grant **Read selected table** access and map the widget's **Link** field
+   to `MODELS.Link` (Text), **Name** to `MODELS.Name` (Text), and **Show** to
+   `MODELS.Show` (Toggle/Bool).
+5. Put one direct HTTP(S) IFC file URL in each row's `Link` cell. Only rows
+   where `Show` is enabled are loaded. The model host must allow browser
+   cross-origin requests from the widget.
 
 The widget downloads models from the URLs in the Link column. It does not send
 Grist access tokens to model hosts.
