@@ -3,6 +3,7 @@ import { chooseSharedRtcOffset } from '@ifc-lite/geometry/world-frame';
 import { convergeGeometryOntoRtcAnchor } from '@ifc-lite/geometry/rtc-rebase';
 import { IfcParser, type IfcDataStore } from '@ifc-lite/parser';
 import { federationRegistry, Renderer } from '@ifc-lite/renderer';
+import { setupCameraControls } from './camera';
 import './style.css';
 
 interface GristTableData {
@@ -375,6 +376,7 @@ function start(): void {
   void (async () => {
     try {
       await renderer.init();
+      setupCameraControls(canvas, renderer);
       await geometryProcessor.init();
       resizeObserver = new ResizeObserver(() => {
         renderer.resize(canvas.clientWidth, canvas.clientHeight);
