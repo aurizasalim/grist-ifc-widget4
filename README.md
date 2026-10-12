@@ -35,4 +35,5 @@ browser's main thread so the Grist widget API can load without cross-origin
 isolation headers.
 
 Pushing to `main` automatically builds and publishes `dist/` to GitHub Pages
-once Pages has been enabled for the repository.
+once Pages has been enabled for the repository. You can also trigger a
+deployment from **Actions → Deploy to GitHub Pages → Run workflow**.
