@@ -12,19 +12,19 @@ interface CameraView {
 export class CameraViewState {
   private hasEstablishedView = false;
 
-  capture(renderer: Renderer): CameraView | null {
-    if (!this.hasEstablishedView) return null;
-
-    const camera = renderer.getCamera();
-    return {
-      position: camera.getPosition(),
-      target: camera.getTarget(),
-      up: camera.getUp(),
-      fov: camera.getFOV(),
-      projectionMode: camera.getProjectionMode(),
-      orthoSize: camera.getOrthoSize(),
-    };
-  }
+  capture(renderer: Renderer): CameraView {
+  const camera = renderer.getCamera();
+  const view = {
+    position: camera.getPosition(),
+    target: camera.getTarget(),
+    up: camera.getUp(),
+    fov: camera.getFOV(),
+    projectionMode: camera.getProjectionMode(),
+    orthoSize: camera.getOrthoSize(),
+  };
+  this.hasEstablishedView = true;
+  return view;
+}
 
   restore(renderer: Renderer, view: CameraView | null): void {
     if (!view) return;
