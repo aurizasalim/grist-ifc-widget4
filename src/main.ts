@@ -3,20 +3,27 @@ import { chooseSharedRtcOffset } from '@ifc-lite/geometry/world-frame';
 import { convergeGeometryOntoRtcAnchor } from '@ifc-lite/geometry/rtc-rebase';
 import { IfcParser, type IfcDataStore } from '@ifc-lite/parser';
 import { federationRegistry, Renderer } from '@ifc-lite/renderer';
-import { CameraViewState, setupCameraControls } from './camera';
+import { CameraViewState, setupCameraControls, type CameraView } from './camera';
 import './style.css';
 
 interface GristTableData {
   [columnId: string]: unknown[];
 }
 
+interface GristRecord {
+  id: number;
+  [columnId: string]: unknown;
+}
+
 interface GristApi {
   ready(settings: {
     requiredAccess: 'full';
   }): void;
+  onRecord(callback: (record: GristRecord | null) => void): void;
   onRecords(callback: () => void): void;
   docApi: {
     fetchTable(tableId: string): Promise<GristTableData>;
+    applyUserActions(actions: unknown[][]): Promise<unknown>;
   };
 }
 
@@ -46,12 +53,17 @@ const canvas = requireElement<HTMLCanvasElement>('#viewer');
 const status = requireElement<HTMLElement>('#status');
 const selectionPanel = requireElement<HTMLElement>('#selection');
 const errorPanel = requireElement<HTMLElement>('#error');
+const cameraTargetInfo = requireElement<HTMLElement>('#camera-target-info');
+const saveCameraBtn = requireElement<HTMLButtonElement>('#save-camera-btn');
+const loadCameraBtn = requireElement<HTMLButtonElement>('#load-camera-btn');
 const gristApi = typeof grist === 'undefined' ? null : grist;
 const renderer = new Renderer(canvas);
 const geometryProcessor = new GeometryProcessor({ enableInstancing: false });
 const parser = new IfcParser();
 const cameraViewState = new CameraViewState();
 const loadedModels = new Map<string, LoadedModel>();
+const modelCameras = new Map<number, string>();
+let selectedRecord: GristRecord | null = null;
 let animationFrame: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let previousFrameTime = 0;
@@ -76,6 +88,124 @@ function showError(error: unknown): void {
 function clearError(): void {
   errorPanel.textContent = '';
   errorPanel.hidden = true;
+}
+
+function updateSelectedRecord(record: GristRecord | null): void {
+  selectedRecord = record;
+  if (!record || typeof record.id !== 'number') {
+    cameraTargetInfo.textContent = 'No row selected';
+    cameraTargetInfo.title = 'Select a row in Grist to save or load camera positions';
+    saveCameraBtn.disabled = true;
+    loadCameraBtn.hidden = true;
+    return;
+  }
+
+  const name = typeof record.Name === 'string' && record.Name.trim()
+    ? record.Name.trim()
+    : `Row #${record.id}`;
+  cameraTargetInfo.textContent = name;
+  cameraTargetInfo.title = `${name} (Row ID: ${record.id})`;
+  saveCameraBtn.disabled = false;
+
+  const cameraStr = (typeof record.Camera === 'string' && record.Camera.trim())
+    || modelCameras.get(record.id)
+    || '';
+  let hasValidCamera = false;
+  if (cameraStr) {
+    try {
+      const parsed = JSON.parse(cameraStr);
+      hasValidCamera = Boolean(parsed && parsed.position && parsed.target);
+    } catch {
+      hasValidCamera = false;
+    }
+  }
+
+  loadCameraBtn.hidden = !hasValidCamera;
+}
+
+function setupCameraToolbar(): void {
+  saveCameraBtn.addEventListener('click', async () => {
+    if (!selectedRecord || typeof selectedRecord.id !== 'number') return;
+    const targetId = selectedRecord.id;
+    const camera = renderer.getCamera();
+    const currentView: CameraView = {
+      position: camera.getPosition(),
+      target: camera.getTarget(),
+      up: camera.getUp(),
+      fov: camera.getFOV(),
+      projectionMode: camera.getProjectionMode(),
+      orthoSize: camera.getOrthoSize(),
+    };
+
+    const jsonStr = JSON.stringify(currentView);
+    saveCameraBtn.disabled = true;
+    const originalHtml = saveCameraBtn.innerHTML;
+    saveCameraBtn.textContent = 'Saving…';
+
+    try {
+      if (gristApi) {
+        try {
+          await gristApi.docApi.applyUserActions([
+            ['UpdateRecord', 'Models', targetId, { Camera: jsonStr }]
+          ]);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Camera') || msg.includes('column') || msg.includes('Invalid column')) {
+            await gristApi.docApi.applyUserActions([
+              ['AddVisibleColumn', 'Models', 'Camera', { type: 'Text' }],
+              ['UpdateRecord', 'Models', targetId, { Camera: jsonStr }]
+            ]);
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      modelCameras.set(targetId, jsonStr);
+      if (selectedRecord && selectedRecord.id === targetId) {
+        selectedRecord.Camera = jsonStr;
+        loadCameraBtn.hidden = false;
+      }
+
+      saveCameraBtn.classList.add('success');
+      saveCameraBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Saved!</span>
+      `;
+      setTimeout(() => {
+        saveCameraBtn.classList.remove('success');
+        saveCameraBtn.innerHTML = originalHtml;
+        saveCameraBtn.disabled = false;
+      }, 1800);
+      setStatus(`Saved camera position to row #${targetId}.`);
+    } catch (error) {
+      saveCameraBtn.classList.remove('success');
+      saveCameraBtn.innerHTML = originalHtml;
+      saveCameraBtn.disabled = false;
+      showError(`Failed to save camera position: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+
+  loadCameraBtn.addEventListener('click', () => {
+    if (!selectedRecord || typeof selectedRecord.id !== 'number') return;
+    const cameraStr = (typeof selectedRecord.Camera === 'string' && selectedRecord.Camera.trim())
+      || modelCameras.get(selectedRecord.id);
+    if (!cameraStr) return;
+
+    try {
+      const view = JSON.parse(cameraStr);
+      if (cameraViewState.restore(renderer, view)) {
+        cameraViewState.saveToStorage(renderer);
+        setStatus(`Restored camera view from row #${selectedRecord.id}.`);
+      } else {
+        showError('Saved camera data in this row is invalid.');
+      }
+    } catch (error) {
+      showError(`Failed to load saved camera view: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
 }
 
 function buildSourceModels(table: GristTableData): SourceModel[] {
@@ -351,6 +481,23 @@ function refreshModels(): void {
 
   void (async () => {
     const table = await gristApi.docApi.fetchTable('Models');
+    modelCameras.clear();
+    const rowIds = table.id;
+    const cameras = table.Camera;
+    if (Array.isArray(rowIds) && Array.isArray(cameras)) {
+      rowIds.forEach((id, idx) => {
+        if (typeof id === 'number' && typeof cameras[idx] === 'string' && cameras[idx].trim()) {
+          modelCameras.set(id, cameras[idx].trim());
+        }
+      });
+    }
+    if (selectedRecord && typeof selectedRecord.id === 'number') {
+      const updatedCamera = modelCameras.get(selectedRecord.id);
+      if (updatedCamera !== undefined) {
+        selectedRecord.Camera = updatedCamera;
+      }
+      updateSelectedRecord(selectedRecord);
+    }
     const sources = buildSourceModels(table);
     const fingerprint = JSON.stringify(sources);
     if (fingerprint === currentFingerprint) return;
@@ -390,6 +537,7 @@ function start(): void {
     try {
       await renderer.init();
       setupCameraControls(canvas, renderer, cameraViewState);
+      setupCameraToolbar();
       await geometryProcessor.init();
       resizeObserver = new ResizeObserver(() => {
         renderer.resize(canvas.clientWidth, canvas.clientHeight);
@@ -401,8 +549,23 @@ function start(): void {
         try {
           const rect = canvas.getBoundingClientRect();
           const hit = await renderer.pick(event.clientX - rect.left, event.clientY - rect.top);
-          if (hit) displaySelection(hit.expressId);
-          else selectionPanel.textContent = 'Click an element to inspect it.';
+          if (hit) {
+            displaySelection(hit.expressId);
+            const lookup = federationRegistry.fromGlobalId(hit.expressId);
+            if (lookup) {
+              const rowId = parseInt(lookup.modelId.split(':')[0], 10);
+              if (Number.isFinite(rowId) && (!selectedRecord || selectedRecord.id !== rowId)) {
+                const model = loadedModels.get(lookup.modelId);
+                updateSelectedRecord({
+                  id: rowId,
+                  Name: model?.name ?? `Row #${rowId}`,
+                  Camera: modelCameras.get(rowId),
+                });
+              }
+            }
+          } else {
+            selectionPanel.textContent = 'Click an element to inspect it.';
+          }
         } catch (error) {
           showError(error);
         }
@@ -410,6 +573,7 @@ function start(): void {
       gristApi.ready({
         requiredAccess: 'full',
       });
+      gristApi.onRecord(updateSelectedRecord);
       gristApi.onRecords(refreshModels);
       refreshModels();
       refreshInterval = window.setInterval(refreshModels, 1000);
