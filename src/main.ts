@@ -263,7 +263,9 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
     ? 'Unloading disabled models…'
     : `Loading ${sources.length} IFC model${sources.length === 1 ? '' : 's'}…`);
   selectionPanel.hidden = true;
-  const cameraView = cameraViewState.capture(renderer);
+  const cameraView = cameraViewState.hasEstablished()
+    ? cameraViewState.capture(renderer)
+    : cameraViewState.loadFromStorage();
   await renderer.init();
   if (generation !== requestGeneration || signal.aborted) return;
 
@@ -271,7 +273,7 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
   federationRegistry.clear();
 
   if (sources.length === 0) {
-    cameraViewState.restore(renderer, cameraView);
+    if (cameraView) cameraViewState.restore(renderer, cameraView);
     setStatus('No models are marked Show.');
     return;
   }
@@ -330,8 +332,15 @@ async function loadFederation(sources: SourceModel[], requestGeneration: number,
 
   loadedModels.clear();
   for (const model of stagedModels) loadedModels.set(model.id, model);
-  setVisibleGeometry(cameraView === null);
-  cameraViewState.restore(renderer, cameraView);
+  const shouldFitView = cameraView === null;
+  setVisibleGeometry(shouldFitView);
+  if (cameraView) {
+    cameraViewState.restore(renderer, cameraView);
+    cameraViewState.saveToStorage(renderer);
+  } else {
+    cameraViewState.markEstablished();
+    cameraViewState.saveToStorage(renderer);
+  }
   const entityCount = stagedModels.reduce((sum, model) => sum + model.store.entityCount, 0);
   setStatus(`Federated ${stagedModels.length} model${stagedModels.length === 1 ? '' : 's'} · ${entityCount.toLocaleString()} entities`);
 }
@@ -380,7 +389,7 @@ function start(): void {
   void (async () => {
     try {
       await renderer.init();
-      setupCameraControls(canvas, renderer);
+      setupCameraControls(canvas, renderer, cameraViewState);
       await geometryProcessor.init();
       resizeObserver = new ResizeObserver(() => {
         renderer.resize(canvas.clientWidth, canvas.clientHeight);
@@ -415,6 +424,7 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('beforeunload', () => {
+  cameraViewState.saveToStorage(renderer);
   if (animationFrame !== null) cancelAnimationFrame(animationFrame);
   if (refreshInterval !== null) window.clearInterval(refreshInterval);
   resizeObserver?.disconnect();
