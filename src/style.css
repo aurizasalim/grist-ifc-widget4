@@ -58,50 +58,28 @@ main {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid rgb(55 65 81 / 85%);
-  border-radius: 0.45rem;
-  background: rgb(31 41 55 / 92%);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.25), 0 2px 4px -2px rgb(0 0 0 / 0.25);
-  font-size: 0.8rem;
-  color: #d1d5db;
-}
-
-.camera-target-info {
-  font-size: 0.78rem;
-  color: #9ca3af;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.camera-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
 }
 
 .toolbar-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem;
-  border: 1px solid #4b5563;
-  border-radius: 0.35rem;
-  background: #374151;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgb(75 85 99 / 80%);
+  border-radius: 0.45rem;
+  background: rgb(31 41 55 / 92%);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.25), 0 2px 4px -2px rgb(0 0 0 / 0.25);
   color: #f3f4f6;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, transform 0.1s, color 0.15s;
 }
 
 .toolbar-btn:hover:not(:disabled) {
-  background: #4b5563;
-  border-color: #6b7280;
+  background: #374151;
+  border-color: #9ca3af;
 }
 
 .toolbar-btn:active:not(:disabled) {

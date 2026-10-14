@@ -13,24 +13,14 @@
       <main>
         <canvas id="viewer" aria-label="Federated IFC models"></canvas>
         <div id="camera-toolbar" class="camera-toolbar" aria-label="Camera controls">
-          <span id="camera-target-info" class="camera-target-info">No row selected</span>
-          <div class="camera-toolbar-actions">
-            <button id="save-camera-btn" type="button" class="toolbar-btn" title="Save current camera to selected Grist row" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
-              <span>Save View</span>
-            </button>
-            <button id="load-camera-btn" type="button" class="toolbar-btn" title="Load saved camera from selected Grist row" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              <span>Load View</span>
-            </button>
-          </div>
+          <button id="save-camera-btn" type="button" class="toolbar-btn" title="Save current camera to selected Grist row" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span>Save View</span>
+          </button>
         </div>
         <section id="selection" aria-label="Selected element" hidden></section>
         <div id="status" role="status" aria-live="polite">Waiting for Grist data…</div>
