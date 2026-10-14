@@ -109,10 +109,35 @@ function clearError(): void {
   errorPanel.hidden = true;
 }
 
+function getCameraColumnValue(record: GristRecord, mappings: ColumnMapping | null): string | null {
+  // Try mapped column first, then common fallback column names
+  const mappedCol = mappings?.camera;
+  if (mappedCol && typeof record[mappedCol] === 'string') return record[mappedCol] as string;
+  for (const col of ['JSON', 'Camera', 'camera', 'CameraJSON', 'camera_json']) {
+    if (typeof record[col] === 'string' && (record[col] as string).trim().startsWith('{')) {
+      return record[col] as string;
+    }
+  }
+  return null;
+}
+
+function loadCameraFromRecord(record: GristRecord | null, mappings: ColumnMapping | null): void {
+  if (!record) return;
+  const jsonStr = getCameraColumnValue(record, mappings);
+  if (!jsonStr) return;
+  try {
+    const parsed = JSON.parse(jsonStr);
+    cameraViewState.restore(renderer, parsed);
+  } catch {
+    // Ignore invalid JSON
+  }
+}
+
 function updateSelectedRecord(record: GristRecord | null, mappings: ColumnMapping | null = null): void {
   selectedRecord = record;
   if (mappings) currentMappings = mappings;
   saveCameraBtn.disabled = !record || typeof record.id !== 'number';
+  loadCameraFromRecord(record, currentMappings);
 }
 
 function setupCameraToolbar(): void {
